@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>X Radar 监控助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>🛰 X Radar 监控助手</h1>
+  </header>
+
+  <!-- 设置区 -->
+  <section class="settings">
+    <label>
+      服务器地址
+      <input id="server" type="url" placeholder="http://127.0.0.1:8787" spellcheck="false">
+    </label>
+    <label>
+      Token（可选，对应服务端 XR_TOKEN）
+      <input id="token" type="password" placeholder="未设置 XR_TOKEN 时留空" spellcheck="false">
+    </label>
+    <div class="row">
+      <button id="save">保存</button>
+      <span class="status">
+        <span id="dot" class="dot"></span>
+        <span id="statusText">未检测</span>
+      </span>
+    </div>
+    <div id="health" class="health hidden">
+      监控 <b id="hAccounts">-</b> · 推文 <b id="hTweets">-</b> · LLM
+      <span id="hLlm" class="badge badge-off">-</span>
+    </div>
+  </section>
+
+  <!-- 未读列表 -->
+  <section class="unread">
+    <div class="section-title">未读新推文</div>
+    <ul id="unreadList"></ul>
+    <div id="empty" class="empty">暂无未读，插件在后台自动轮询…</div>
+  </section>
+
+  <footer>
+    <a href="#" id="openPanel">打开监控面板 ↗</a>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

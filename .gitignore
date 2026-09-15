@@ -1,0 +1,23 @@
+# 密钥与环境
+.env
+*.key
+
+# 运行数据（截图/数据库/日志）
+data/
+logs/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+
+# 安全扫描与本地工具
+.mimosa/
+
+# 系统杂项
+.DS_Store

@@ -1,0 +1,30 @@
+[project]
+name = "x-radar"
+version = "0.1.0"
+description = "X(Twitter) 博主推文监控台：匿名轮询 + 无账号截图 + AI 中文摘要"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "JingHao-Leon" }]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "httpx>=0.27",
+    "playwright>=1.45",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+x-radar = "x_radar.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

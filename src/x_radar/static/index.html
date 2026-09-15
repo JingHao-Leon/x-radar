@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="X Radar —— X（Twitter）推文监控仪表盘：多账号监控、AI 中文摘要、引用网页截图、SSE 实时推送。" />
+  <title>X Radar · X 推文监控台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='0.9em'%20font-size='90'%3E%F0%9F%9B%B0%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <!-- ======== 左侧栏 ======== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="logo">
+        <span class="logo-icon" aria-hidden="true">🛰</span>
+        <span class="logo-text">X Radar</span>
+      </div>
+
+      <section class="card side-card" aria-label="运行状态">
+        <h2 class="side-title">运行状态</h2>
+        <div class="conn conn-wait" id="connState"><i class="dot"></i><span>正在连接…</span></div>
+        <div class="llm-badge" id="llmBadge"><span class="badge badge-rule">检查中…</span></div>
+        <dl class="status-grid">
+          <div class="status-item"><dt>上次轮询</dt><dd id="lastPoll">—</dd></div>
+          <div class="status-item"><dt>下次轮询</dt><dd id="nextPoll">—</dd></div>
+          <div class="status-item"><dt>轮询次数</dt><dd id="pollCount">—</dd></div>
+          <div class="status-item"><dt>已处理 / 失败</dt><dd><span id="processedCount">—</span><span class="dim"> / </span><span id="failedCount">—</span></dd></div>
+        </dl>
+        <p class="health-meta" id="healthMeta"></p>
+      </section>
+
+      <section class="card side-card" aria-label="监控账号">
+        <h2 class="side-title">监控账号<span class="count-pill" id="accountCount"></span></h2>
+        <ul class="account-list" id="accountList"></ul>
+        <form class="add-account" id="addAccountForm" autocomplete="off">
+          <input id="addAccountInput" name="handle" placeholder="添加账号，@ 可省略" maxlength="16" aria-label="要监控的账号 handle" />
+          <button type="submit" class="btn btn-primary">添加</button>
+        </form>
+        <p class="form-msg" id="accountMsg" role="status"></p>
+      </section>
+    </aside>
+
+    <!-- ======== 主内容区 ======== -->
+    <main class="main">
+      <div class="main-inner">
+        <div class="toolbar">
+          <div class="search-wrap">
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input id="searchInput" type="search" placeholder="搜索推文、作者、摘要…" aria-label="搜索推文" />
+          </div>
+          <div class="chips" id="chips" role="tablist" aria-label="按账号筛选"></div>
+        </div>
+
+        <div class="feed-meta"><span id="feedCount"></span></div>
+
+        <section class="feed" id="feed" aria-live="polite" aria-label="推文卡片流"></section>
+        <div class="empty hidden" id="emptyState"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ======== 图片 Lightbox ======== -->
+  <div class="lightbox hidden" id="lightbox" role="dialog" aria-modal="true" aria-label="图片预览">
+    <button class="lightbox-close" type="button" aria-label="关闭预览">✕</button>
+    <img id="lightboxImg" alt="预览大图" />
+  </div>
+</body>
+</html>
