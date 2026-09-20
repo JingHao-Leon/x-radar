@@ -1,6 +1,6 @@
 [project]
 name = "x-radar"
-version = "0.1.0"
+version = "0.1.1"
 description = "X(Twitter) 博主推文监控台：匿名轮询 + 无账号截图 + AI 中文摘要"
 readme = "README.md"
 license = { text = "MIT" }

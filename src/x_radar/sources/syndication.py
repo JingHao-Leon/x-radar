@@ -30,6 +30,21 @@ class SourceError(RuntimeError):
     pass
 
 
+class RateLimitedError(SourceError):
+    """syndication 返回 429：同一 IP 请求过频。retry_after 取自响应头。"""
+
+    def __init__(self, retry_after: int | None = None):
+        super().__init__(
+            "HTTP 429 限流" + (f"（Retry-After {retry_after}s）" if retry_after else "")
+        )
+        self.retry_after = retry_after
+
+
+def _retry_after_of(resp: httpx.Response) -> int | None:
+    raw = resp.headers.get("Retry-After", "")
+    return int(raw) if raw.isdigit() else None
+
+
 def valid_handle(handle: str) -> bool:
     return bool(HANDLE_RE.match(handle))
 
@@ -184,6 +199,8 @@ class SyndicationSource:
             resp = await client.get(url)
         except httpx.HTTPError as e:
             raise SourceError(f"网络错误: {e}") from e
+        if resp.status_code == 429:
+            raise RateLimitedError(_retry_after_of(resp))
         if resp.status_code != 200:
             raise SourceError(f"HTTP {resp.status_code}（账号不存在或被限流）")
         return parse_next_data(resp.text)
@@ -193,6 +210,8 @@ class SyndicationSource:
         url = f"https://syndication.twitter.com/srv/timeline-profile/screen-name/{handle}?showReplies=false"
         client = await self._ensure_client()
         resp = await client.get(url)
+        if resp.status_code == 429:
+            raise RateLimitedError(_retry_after_of(resp))
         if resp.status_code != 200:
             raise SourceError(f"HTTP {resp.status_code}（账号不存在或被限流）")
         return parse_user(resp.text)

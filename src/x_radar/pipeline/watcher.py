@@ -14,6 +14,7 @@ from ..bus import EventBus
 from ..config import Settings
 from ..db import Store, utc_now
 from ..sources.syndication import (
+    RateLimitedError,
     SourceError,
     SyndicationSource,
     filter_for_handle,
@@ -23,6 +24,43 @@ from .shots import ShotError, ShotManager, sanitize_filename
 from .summarize import summarize_page, summarize_tweet
 
 log = logging.getLogger("x_radar.watcher")
+
+
+class Backoff:
+    """429 限流退避状态机：触发即升一级（5→10→20→30→60 分钟封顶），
+    每经历一轮干净轮询回落一级；Retry-After 大于当前档位时临时覆盖。"""
+
+    STEPS = (300, 600, 1200, 1800, 3600)
+
+    def __init__(self) -> None:
+        self._level = -1  # -1 = 未退避
+        self._override = 0
+
+    def escalate(self, retry_after: int | None = None) -> None:
+        if self._level < len(self.STEPS) - 1:
+            self._level += 1
+        self._override = 0
+        if retry_after:
+            try:
+                self._override = max(int(retry_after), 0)
+            except (TypeError, ValueError):
+                self._override = 0
+
+    def decay(self) -> None:
+        if self._override:
+            self._override = 0
+            return
+        if self._level >= 0:
+            self._level -= 1
+
+    @property
+    def seconds(self) -> int:
+        base = 0 if self._level < 0 else self.STEPS[self._level]
+        return max(base, self._override)
+
+    def reset(self) -> None:
+        self._level = -1
+        self._override = 0
 
 
 def _iso_now() -> str:
@@ -39,11 +77,13 @@ class Watcher:
         self.source = source or SyndicationSource(settings)
         self.shots = shots or ShotManager(settings)
         self.queue: asyncio.Queue[str] = asyncio.Queue(maxsize=500)
+        self.backoff = Backoff()
         self._tasks: list[asyncio.Task] = []
         self._stop = asyncio.Event()
         self.status: dict = {
             "last_poll_at": None, "next_poll_at": None, "poll_count": 0,
             "processed": 0, "failed": 0, "errors": [],
+            "backoff_seconds": 0,
             "source": self.source.name, "headless": settings.headless,
         }
 
@@ -99,15 +139,24 @@ class Watcher:
     # ---------- 轮询 ----------
     async def _poll_loop(self) -> None:
         while not self._stop.is_set():
+            rate_limited = False
             try:
-                await self.poll_once()
+                rate_limited = await self.poll_once()
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # 兜底，保持循环存活
                 log.exception("poll loop error")
                 self._add_error(f"轮询异常: {e}")
                 self._publish_status()
-            wait = self.cfg.poll_interval
+            if rate_limited:
+                # poll_once 内已按 Retry-After 升级退避；等待间隔叠加退避秒数
+                self._add_error(f"被 X 限流，退避 {self.backoff.seconds // 60} 分钟后自动恢复")
+            elif self.backoff.seconds:
+                self.backoff.decay()
+                if self.backoff.seconds == 0:
+                    self._add_error("限流解除，恢复正常轮询")
+            wait = self.cfg.poll_interval + self.backoff.seconds
+            self.status["backoff_seconds"] = self.backoff.seconds
             self.status["next_poll_at"] = _iso_now_offset(wait)
             self._publish_status()
             try:
@@ -115,19 +164,26 @@ class Watcher:
             except asyncio.TimeoutError:
                 pass
 
-    async def poll_once(self, only: list[str] | None = None) -> int:
-        """拉一轮时间线，返回新增条数。"""
+    async def poll_once(self, only: list[str] | None = None) -> bool:
+        """拉一轮时间线，返回是否触发限流。"""
         accounts = [a["handle"] for a in self.store.list_accounts() if a["enabled"]]
         if only:
             accounts = [h for h in accounts if h.lower() in
                         {x.lower().lstrip('@') for x in only}] or only
         new_total = 0
+        rate_limited = False
         self.status["last_poll_at"] = utc_now()
         self.status["poll_count"] += 1
         for handle in accounts:
             try:
                 tweets = await self.source.fetch_timeline(handle)
                 tweets = filter_for_handle(tweets, handle)
+            except RateLimitedError as e:
+                # 限流是按 IP 的：一个账号 429，其余账号必同样受限，全局暂停本轮
+                self.backoff.escalate(e.retry_after)
+                self._add_error(f"@{handle}: {e}（跳过本轮其余账号）")
+                rate_limited = True
+                break
             except SourceError as e:
                 self._add_error(f"@{handle}: {e}")
                 log.warning("poll %s failed: %s", handle, e)
@@ -147,7 +203,7 @@ class Watcher:
         if new_total:
             log.info("poll: %s new tweets", new_total)
         self._publish_status()
-        return new_total
+        return rate_limited
 
     # ---------- 队列处理 ----------
     def _enqueue(self, tweet_id: str) -> None:
